@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Ejecutivo Postventa - Conector Box</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- PapaParse CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { background-color: #0f172a; color: #f8fafc; font-family: ui-sans-serif, system-ui, sans-serif; }
+  </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Encabezado -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between bg-slate-800/90 p-6 rounded-2xl border border-slate-700 shadow-2xl gap-4">
+      <div>
+        <h1 class="text-2xl font-bold text-white flex items-center gap-3">
+          <i data-lucide="box" class="text-blue-400"></i> Dashboard Postventa (Nube Box)
+        </h1>
+        <p class="text-slate-400 text-sm mt-1">Sincronizado en tiempo real desde Box Cloud | Auto-actualización cada 60 min</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="status-badge" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Conectando...
+        </span>
+        <button onclick="loadBoxData()" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-blue-600/30">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i> Recargar Data
+        </button>
+      </div>
+    </div>
+
+    <!-- Tarjetas KPI -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-slate-800/60 border border-slate-700/80 p-5 rounded-2xl">
+        <div class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Cuentas / Registros</div>
+        <div id="kpi-total-clients" class="text-3xl font-extrabold text-white mt-2">--</div>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700/80 p-5 rounded-2xl">
+        <div class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Abonados</div>
+        <div id="kpi-total-subscribers" class="text-3xl font-extrabold text-teal-400 mt-2">--</div>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700/80 p-5 rounded-2xl">
+        <div class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Cuentas Pagadas / Al Día</div>
+        <div id="kpi-paid-clients" class="text-3xl font-extrabold text-emerald-400 mt-2">--</div>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700/80 p-5 rounded-2xl">
+        <div class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Pendientes / Por Cobrar</div>
+        <div id="kpi-pending-clients" class="text-3xl font-extrabold text-amber-400 mt-2">--</div>
+      </div>
+    </div>
+
+    <!-- Gráficos Postventa -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2 bg-slate-800/60 border border-slate-700/80 p-6 rounded-2xl">
+        <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <i data-lucide="bar-chart-2" class="text-blue-400"></i> Distribución de Abonados por Cliente / App
+        </h2>
+        <div class="h-64">
+          <canvas id="subscribersChart"></canvas>
+        </div>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700/80 p-6 rounded-2xl">
+        <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <i data-lucide="pie-chart" class="text-indigo-400"></i> Estado de Recaudación / Pagos
+        </h2>
+        <div class="h-64 flex items-center justify-center">
+          <canvas id="paymentStatusChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filtro y Tabla -->
+    <div class="bg-slate-800/60 border border-slate-700/80 p-6 rounded-2xl space-y-4">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+          <i data-lucide="database" class="text-emerald-400"></i> Detalle de Cuentas Sincronizadas
+        </h2>
+        <input type="text" id="searchInput" oninput="filterData()" placeholder="Buscar empresa, app o estado..." class="bg-slate-900/90 border border-slate-700 text-white placeholder-slate-500 text-sm rounded-xl px-4 py-2.5 w-full sm:w-80 focus:outline-none focus:border-blue-500">
+      </div>
+
+      <div class="overflow-x-auto rounded-xl border border-slate-700/60">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-900/90 text-slate-400 uppercase text-xs tracking-wider">
+            <tr id="table-head"></tr>
+          </thead>
+          <tbody id="table-body" class="divide-y divide-slate-700/50 bg-slate-800/20"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Enlace compartido de Box convertido dinámicamente a descarga de datos
+    const BOX_SHARED_URL = 'https://app.box.com/s/75y52arkmnw31uhrju65giwezder6s56';
+    const BOX_DOWNLOAD_URL = 'https://app.box.com/index.php?rm=box_download_shared_file&shared_name=75y52arkmnw31uhrju65giwezder6s56&file_id=f_0';
+    const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(BOX_DOWNLOAD_URL);
+
+    let globalData = [];
+    let globalHeaders = [];
+    let subscribersChartInstance = null;
+    let paymentChartInstance = null;
+
+    function setBadge(type, text) {
+      const badge = document.getElementById('status-badge');
+      if (type === 'loading') {
+        badge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20';
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> ${text}`;
+      } else if (type === 'success') {
+        badge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ${text}`;
+      } else {
+        badge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20';
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> ${text}`;
+      }
+    }
+
+    function loadBoxData() {
+      setBadge('loading', 'Cargando datos desde Box...');
+
+      Papa.parse(PROXY_URL, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          if (results && results.data && results.data.length > 0) {
+            globalData = results.data;
+            globalHeaders = Object.keys(results.data[0]);
+            setBadge('success', 'Sincronizado con Box');
+            renderDashboard(globalData, globalHeaders);
+          } else {
+            setBadge('error', 'Archivo Box Vacío / Sin formato CSV');
+          }
+        },
+        error: function(err) {
+          console.error("Error al descargar desde Box:", err);
+          setBadge('error', 'Error de acceso a Box');
+        }
+      });
+    }
+
+    function renderDashboard(data, headers) {
+      if (!data || data.length === 0) return;
+
+      const clientKey = headers.find(h => /cliente|empresa|fantasia|app|nombre/i.test(h)) || headers[0];
+      const subsKey = headers.find(h => /abonad|usuario|suscriptor|cantidad/i.test(h)) || null;
+      const payKey = headers.find(h => /pago|estado|situacion|cobro/i.test(h)) || null;
+
+      let totalSubscribers = 0;
+      let paidCount = 0;
+      let pendingCount = 0;
+      let subGrowth = [];
+      let paymentCounts = { "Pagado": 0, "Pendiente": 0, "Otros": 0 };
+
+      data.forEach((row, idx) => {
+        if (subsKey && row[subsKey] !== undefined && row[subsKey] !== '') {
+          const val = parseInt(String(row[subsKey]).replace(/\D/g, '')) || 0;
+          totalSubscribers += val;
+          subGrowth.push({ name: String(row[clientKey] || `Cliente ${idx+1}`).substring(0, 18), value: val });
+        }
+
+        if (payKey && row[payKey] !== undefined) {
+          const status = String(row[payKey]).toLowerCase();
+          if (status.includes('pag') || status.includes('si') || status.includes('al dia') || status === '1') {
+            paidCount++;
+            paymentCounts["Pagado"]++;
+          } else if (status.includes('pend') || status.includes('no') || status.includes('deuda') || status === '0') {
+            pendingCount++;
+            paymentCounts["Pendiente"]++;
+          } else {
+            paymentCounts["Otros"]++;
+          }
+        }
+      });
+
+      document.getElementById('kpi-total-clients').innerText = data.length;
+      document.getElementById('kpi-total-subscribers').innerText = totalSubscribers > 0 ? totalSubscribers.toLocaleString('es-ES') : 'N/D';
+      document.getElementById('kpi-paid-clients').innerText = paidCount;
+      document.getElementById('kpi-pending-clients').innerText = pendingCount;
+
+      renderCharts(subGrowth, paymentCounts);
+      renderTable(data, headers, payKey, subsKey);
+    }
+
+    function renderCharts(subGrowth, paymentCounts) {
+      if (subscribersChartInstance) subscribersChartInstance.destroy();
+      const ctxSub = document.getElementById('subscribersChart').getContext('2d');
+      subscribersChartInstance = new Chart(ctxSub, {
+        type: 'bar',
+        data: {
+          labels: subGrowth.slice(0, 12).map(i => i.name),
+          datasets: [{
+            label: 'Abonados',
+            data: subGrowth.slice(0, 12).map(i => i.value),
+            backgroundColor: 'rgba(59, 130, 246, 0.75)',
+            borderColor: '#3b82f6',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } },
+            y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+          }
+        }
+      });
+
+      if (paymentChartInstance) paymentChartInstance.destroy();
+      const ctxPay = document.getElementById('paymentStatusChart').getContext('2d');
+      paymentChartInstance = new Chart(ctxPay, {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(paymentCounts),
+          datasets: [{
+            data: Object.values(paymentCounts),
+            backgroundColor: ['#34d399', '#f87171', '#fbbf24']
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { size: 11 } } } }
+        }
+      });
+    }
+
+    function renderTable(data, headers, payKey, subsKey) {
+      const thead = document.getElementById('table-head');
+      const tbody = document.getElementById('table-body');
+
+      thead.innerHTML = headers.map(h => `<th class="p-3.5 text-xs font-bold tracking-wider">${h}</th>`).join('');
+
+      tbody.innerHTML = data.map(row => {
+        const cells = headers.map(h => {
+          let val = row[h] !== undefined ? row[h] : '';
+          
+          if (h === payKey) {
+            const strVal = String(val).toLowerCase();
+            if (strVal.includes('pag') || strVal.includes('si') || strVal === '1') {
+              return `<td class="p-3.5"><span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Pagado</span></td>`;
+            } else if (strVal.includes('pend') || strVal.includes('no') || strVal === '0') {
+              return `<td class="p-3.5"><span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">Pendiente</span></td>`;
+            }
+          }
+
+          if (h === subsKey && !isNaN(val) && val !== '') {
+            return `<td class="p-3.5 font-bold text-blue-300">${parseInt(val).toLocaleString('es-ES')}</td>`;
+          }
+
+          return `<td class="p-3.5 text-slate-300">${val}</td>`;
+        }).join('');
+        return `<tr class="hover:bg-slate-700/30 transition-colors">${cells}</tr>`;
+      }).join('');
+    }
+
+    function filterData() {
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = globalData.filter(row => JSON.stringify(row).toLowerCase().includes(query));
+      renderDashboard(filtered, globalHeaders);
+    }
+
+    window.onload = () => {
+      lucide.createIcons();
+      loadBoxData();
+
+      // Auto-actualización cada 60 minutos (3,600,000 milisegundos)
+      setInterval(() => {
+        console.log("Ejecutando auto-sincronización con Box...");
+        loadBoxData();
+      }, 3600000);
+    };
+  </script>
+</body>
+</html>
