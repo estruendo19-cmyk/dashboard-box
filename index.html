@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Ejecutivo Postventa - Conector Box</title>
+  <title>Dashboard Ejecutivo Postventa - Box Cloud</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Chart.js CDN -->
@@ -26,7 +26,7 @@
         <h1 class="text-2xl font-bold text-white flex items-center gap-3">
           <i data-lucide="box" class="text-blue-400"></i> Dashboard Postventa (Nube Box)
         </h1>
-        <p class="text-slate-400 text-sm mt-1">Sincronizado en tiempo real desde Box Cloud | Auto-actualización cada 60 min</p>
+        <p class="text-slate-400 text-sm mt-1">Conexión directa a Box Storage | Auto-sincronización activa</p>
       </div>
       <div class="flex items-center gap-3">
         <span id="status-badge" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -100,10 +100,9 @@
   </div>
 
   <script>
-    // Enlace compartido de Box convertido dinámicamente a descarga de datos
-    const BOX_SHARED_URL = 'https://app.box.com/s/75y52arkmnw31uhrju65giwezder6s56';
-    const BOX_DOWNLOAD_URL = 'https://app.box.com/index.php?rm=box_download_shared_file&shared_name=75y52arkmnw31uhrju65giwezder6s56&file_id=f_0';
-    const PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(BOX_DOWNLOAD_URL);
+    const BOX_SHARED_ID = '75y52arkmnw31uhrju65giwezder6s56';
+    const DIRECT_BOX_DOWNLOAD = `https://app.box.com/shared/static/${BOX_SHARED_ID}.csv`;
+    const PROXY_URL = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(DIRECT_BOX_DOWNLOAD);
 
     let globalData = [];
     let globalHeaders = [];
@@ -125,7 +124,7 @@
     }
 
     function loadBoxData() {
-      setBadge('loading', 'Cargando datos desde Box...');
+      setBadge('loading', 'Cargando archivo de Box...');
 
       Papa.parse(PROXY_URL, {
         download: true,
@@ -138,12 +137,33 @@
             setBadge('success', 'Sincronizado con Box');
             renderDashboard(globalData, globalHeaders);
           } else {
-            setBadge('error', 'Archivo Box Vacío / Sin formato CSV');
+            // Intento alternativo directo
+            tryDirectBox();
           }
         },
-        error: function(err) {
-          console.error("Error al descargar desde Box:", err);
-          setBadge('error', 'Error de acceso a Box');
+        error: function() {
+          tryDirectBox();
+        }
+      });
+    }
+
+    function tryDirectBox() {
+      Papa.parse(DIRECT_BOX_DOWNLOAD, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          if (results && results.data && results.data.length > 0) {
+            globalData = results.data;
+            globalHeaders = Object.keys(results.data[0]);
+            setBadge('success', 'Sincronizado con Box');
+            renderDashboard(globalData, globalHeaders);
+          } else {
+            setBadge('error', 'Cargue un archivo CSV en Box');
+          }
+        },
+        error: function() {
+          setBadge('error', 'Error de formato en Box');
         }
       });
     }
@@ -275,9 +295,8 @@
       lucide.createIcons();
       loadBoxData();
 
-      // Auto-actualización cada 60 minutos (3,600,000 milisegundos)
+      // Auto-actualización cada 60 minutos
       setInterval(() => {
-        console.log("Ejecutando auto-sincronización con Box...");
         loadBoxData();
       }, 3600000);
     };
