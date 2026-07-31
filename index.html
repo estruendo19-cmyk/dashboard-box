@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Ejecutivo Postventa - Box Cloud</title>
+  <title>Dashboard Ejecutivo Postventa - Visor Excel (.xlsx)</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Chart.js CDN -->
@@ -24,17 +24,29 @@
     <div class="flex flex-col md:flex-row md:items-center md:justify-between bg-slate-800/90 p-6 rounded-2xl border border-slate-700 shadow-2xl gap-4">
       <div>
         <h1 class="text-2xl font-bold text-white flex items-center gap-3">
-          <i data-lucide="box" class="text-blue-400"></i> Dashboard Postventa (Nube Box)
+          <i data-lucide="file-spreadsheet" class="text-emerald-400"></i> Dashboard Postventa (Visor Excel .xlsx)
         </h1>
-        <p class="text-slate-400 text-sm mt-1">Conexión directa a Box Cloud | Sincronización activa cada 60 min</p>
+        <p class="text-slate-400 text-sm mt-1">Carga directa e instantánea de tu archivo de Excel</p>
       </div>
       <div class="flex items-center gap-3">
-        <span id="status-badge" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Conectando a Box...
+        <span id="status-badge" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-700 text-slate-300 border border-slate-600">
+          <span class="w-2 h-2 rounded-full bg-slate-400"></span> Esperando archivo Excel...
         </span>
-        <button onclick="loadExcelFromBox()" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-blue-600/30">
-          <i data-lucide="refresh-cw" class="w-4 h-4"></i> Recargar Data
-        </button>
+        
+        <!-- Botón para seleccionar el Excel -->
+        <label class="cursor-pointer flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-emerald-600/30">
+          <i data-lucide="upload" class="w-4 h-4"></i> Cargar Excel (.xlsx)
+          <input type="file" id="excel-file-input" accept=".xlsx, .xls" class="hidden" onchange="handleFileSelect(event)">
+        </label>
+      </div>
+    </div>
+
+    <!-- Zona Drag & Drop (Arrastrar archivo) -->
+    <div id="drop-zone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" class="border-2 border-dashed border-slate-700 hover:border-emerald-500/50 rounded-2xl p-8 text-center transition-all bg-slate-800/30">
+      <div class="flex flex-col items-center justify-center gap-2">
+        <i data-lucide="file-up" class="w-10 h-10 text-slate-400"></i>
+        <p class="text-slate-300 font-medium text-sm">Arrastra tu archivo Excel (.xlsx) aquí o haz clic en "Cargar Excel"</p>
+        <p class="text-xs text-slate-500">Procesamiento seguro e instantáneo en memoria</p>
       </div>
     </div>
 
@@ -62,7 +74,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2 bg-slate-800/60 border border-slate-700/80 p-6 rounded-2xl">
         <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <i data-lucide="bar-chart-2" class="text-blue-400"></i> Distribución de Abonados por Cliente / App
+          <i data-lucide="bar-chart-2" class="text-emerald-400"></i> Distribución de Abonados por Cliente / App
         </h2>
         <div class="h-64">
           <canvas id="subscribersChart"></canvas>
@@ -84,7 +96,7 @@
         <h2 class="text-lg font-semibold text-white flex items-center gap-2">
           <i data-lucide="database" class="text-emerald-400"></i> Detalle de Cuentas Sincronizadas
         </h2>
-        <input type="text" id="searchInput" oninput="filterData()" placeholder="Buscar empresa, app o estado..." class="bg-slate-900/90 border border-slate-700 text-white placeholder-slate-500 text-sm rounded-xl px-4 py-2.5 w-full sm:w-80 focus:outline-none focus:border-blue-500">
+        <input type="text" id="searchInput" oninput="filterData()" placeholder="Buscar empresa, app o estado..." class="bg-slate-900/90 border border-slate-700 text-white placeholder-slate-500 text-sm rounded-xl px-4 py-2.5 w-full sm:w-80 focus:outline-none focus:border-emerald-500">
       </div>
 
       <div class="overflow-x-auto rounded-xl border border-slate-700/60">
@@ -100,14 +112,6 @@
   </div>
 
   <script>
-    // Configuración directa de descarga para el archivo exacto de Box
-    const BOX_FILE_ID = '2189680142207';
-    const BOX_SHARED_NAME = '75y52arkmnw31uhrju65giwezder6s56';
-    
-    // URL de descarga directa de Box
-    const DIRECT_BOX_URL = `https://app.box.com/index.php?rm=box_download_shared_file&shared_name=${BOX_SHARED_NAME}&file_id=f_${BOX_FILE_ID}`;
-    const PROXY_URL = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(DIRECT_BOX_URL);
-
     let globalData = [];
     let globalHeaders = [];
     let subscribersChartInstance = null;
@@ -120,40 +124,62 @@
         badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> ${text}`;
       } else if (type === 'success') {
         badge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
-        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ${text}`;
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> ${text}`;
       } else {
         badge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20';
         badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> ${text}`;
       }
     }
 
-    async function loadExcelFromBox() {
-      setBadge('loading', 'Obteniendo Excel de Box...');
-      try {
-        const response = await fetch(PROXY_URL);
-        if (!response.ok) throw new Error("Error de red al conectar con Box");
-        
-        const arrayBuffer = await response.arrayBuffer();
-        
-        // Procesamiento en memoria de Excel (.xlsx)
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (file) processExcelFile(file);
+    }
 
-        if (jsonData && jsonData.length > 0) {
-          globalData = jsonData;
-          globalHeaders = Object.keys(jsonData[0]);
-          setBadge('success', 'Sincronizado con Box');
-          renderDashboard(globalData, globalHeaders);
-        } else {
-          setBadge('error', 'El archivo Excel no tiene datos');
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.currentTarget.classList.add('border-emerald-500', 'bg-slate-800/60');
+    }
+
+    function handleDragLeave(e) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('border-emerald-500', 'bg-slate-800/60');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('border-emerald-500', 'bg-slate-800/60');
+      const file = e.dataTransfer.files[0];
+      if (file) processExcelFile(file);
+    }
+
+    function processExcelFile(file) {
+      setBadge('loading', 'Procesando ' + file.name + '...');
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+          if (jsonData && jsonData.length > 0) {
+            globalData = jsonData;
+            globalHeaders = Object.keys(jsonData[0]);
+            setBadge('success', 'Archivo cargado con éxito');
+            document.getElementById('drop-zone').classList.add('hidden'); // Oculta la zona tras cargar
+            renderDashboard(globalData, globalHeaders);
+          } else {
+            setBadge('error', 'El archivo no contiene registros válidos');
+          }
+        } catch (err) {
+          console.error(err);
+          setBadge('error', 'Error al leer el archivo Excel');
         }
-      } catch (error) {
-        console.error("Error al procesar Excel de Box:", error);
-        setBadge('error', 'Error al sincronizar con Box');
-      }
+      };
+      reader.readAsArrayBuffer(file);
     }
 
     function renderDashboard(data, headers) {
@@ -209,8 +235,8 @@
           datasets: [{
             label: 'Abonados',
             data: subGrowth.slice(0, 12).map(i => i.value),
-            backgroundColor: 'rgba(59, 130, 246, 0.75)',
-            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(16, 185, 129, 0.75)',
+            borderColor: '#10b981',
             borderRadius: 6
           }]
         },
@@ -264,7 +290,7 @@
           }
 
           if (h === subsKey && !isNaN(val) && val !== '') {
-            return `<td class="p-3.5 font-bold text-blue-300">${parseInt(val).toLocaleString('es-ES')}</td>`;
+            return `<td class="p-3.5 font-bold text-teal-300">${parseInt(val).toLocaleString('es-ES')}</td>`;
           }
 
           return `<td class="p-3.5 text-slate-300">${val}</td>`;
@@ -281,12 +307,6 @@
 
     window.onload = () => {
       lucide.createIcons();
-      loadExcelFromBox();
-
-      // Sincronización automática programada cada 60 minutos
-      setInterval(() => {
-        loadExcelFromBox();
-      }, 3600000);
     };
   </script>
 </body>
