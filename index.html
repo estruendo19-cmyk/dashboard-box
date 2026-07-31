@@ -20,7 +20,7 @@
 
   <div class="max-w-7xl mx-auto space-y-6">
     
-    <!-- Encabezado y Control de Carga -->
+    <!-- Encabezado y Controles -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between bg-slate-800/90 p-6 rounded-2xl border border-slate-700 shadow-2xl gap-4">
       <div>
         <h1 class="text-2xl font-bold text-white flex items-center gap-3">
@@ -33,13 +33,13 @@
         <!-- Selector de Pestaña / Mes -->
         <div id="sheet-selector-container" class="hidden flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700">
           <i data-lucide="calendar" class="w-4 h-4 text-emerald-400"></i>
-          <label for="sheetSelect" class="text-xs text-slate-400 font-medium">Mes:</label>
+          <label for="sheetSelect" class="text-xs text-slate-400 font-medium">Mes / Pestaña:</label>
           <select id="sheetSelect" onchange="switchSheet(this.value)" class="bg-transparent text-white text-sm font-semibold focus:outline-none cursor-pointer">
           </select>
         </div>
 
         <span id="status-badge" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-700 text-slate-300 border border-slate-600">
-          <span class="w-2 h-2 rounded-full bg-slate-400"></span> Cargue su Excel
+          <span class="w-2 h-2 rounded-full bg-slate-400"></span> Listo para cargar
         </span>
         
         <!-- Botón para Cargar Excel -->
@@ -54,8 +54,8 @@
     <div id="drop-zone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" class="border-2 border-dashed border-slate-700 hover:border-emerald-500/50 rounded-2xl p-8 text-center transition-all bg-slate-800/30">
       <div class="flex flex-col items-center justify-center gap-2">
         <i data-lucide="file-up" class="w-10 h-10 text-slate-400"></i>
-        <p class="text-slate-300 font-medium text-sm">Arrastra tu archivo Excel con las pestañas de meses aquí</p>
-        <p class="text-xs text-slate-500">Lectura de la columna "Total Pagado" e indicadores automáticos</p>
+        <p class="text-slate-300 font-medium text-sm">Arrastra tu archivo Excel con las pestañas de meses aquí o haz clic en "Cargar Excel"</p>
+        <p class="text-xs text-slate-500">Procesamiento inmediato de la columna "Total Pagado" por pestaña mensual</p>
       </div>
     </div>
 
@@ -103,7 +103,7 @@
     <div class="bg-slate-800/60 border border-slate-700/80 p-6 rounded-2xl space-y-4">
       <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
         <h2 id="table-title" class="text-lg font-semibold text-white flex items-center gap-2">
-          <i data-lucide="database" class="text-emerald-400"></i> Detalle de Cuentas Sincronizadas
+          <i data-lucide="database" class="text-emerald-400"></i> Detalle Cuentas Sincronizadas
         </h2>
         <input type="text" id="searchInput" oninput="filterData()" placeholder="Buscar empresa, app o estado..." class="bg-slate-900/90 border border-slate-700 text-white placeholder-slate-500 text-sm rounded-xl px-4 py-2.5 w-full sm:w-80 focus:outline-none focus:border-emerald-500">
       </div>
@@ -122,7 +122,6 @@
 
   <script>
     let globalWorkbook = null;
-    let currentSheetName = "";
     let globalData = [];
     let globalHeaders = [];
     let subscribersChartInstance = null;
@@ -165,7 +164,7 @@
     }
 
     function processExcelFile(file) {
-      setBadge('loading', 'Leyendo ' + file.name + '...');
+      setBadge('loading', 'Procesando ' + file.name + '...');
 
       const reader = new FileReader();
       reader.onload = function(e) {
@@ -173,7 +172,7 @@
           const data = new Uint8Array(e.target.result);
           globalWorkbook = XLSX.read(data, { type: 'array' });
           
-          // Poblar selector de pestañas (hojas)
+          // Poblar el menú desplegable con todas las pestañas mensuales del Excel
           const sheetSelect = document.getElementById('sheetSelect');
           sheetSelect.innerHTML = '';
           globalWorkbook.SheetNames.forEach(name => {
@@ -186,33 +185,32 @@
           document.getElementById('sheet-selector-container').classList.remove('hidden');
           document.getElementById('drop-zone').classList.add('hidden');
 
-          // Buscar la pestaña de Julio o tomar la última disponible
+          // Seleccionar prioritariamente la pestaña de "Julio" o la última disponible
           const targetSheet = globalWorkbook.SheetNames.find(s => /julio/i.test(s)) || globalWorkbook.SheetNames[globalWorkbook.SheetNames.length - 1];
           sheetSelect.value = targetSheet;
           switchSheet(targetSheet);
 
         } catch (err) {
           console.error(err);
-          setBadge('error', 'Error al leer el libro Excel');
+          setBadge('error', 'Error al leer el archivo Excel');
         }
       };
       reader.readAsArrayBuffer(file);
     }
 
     function switchSheet(sheetName) {
-      currentSheetName = sheetName;
       const worksheet = globalWorkbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
       if (jsonData && jsonData.length > 0) {
         globalData = jsonData;
         globalHeaders = Object.keys(jsonData[0]);
-        setBadge('success', `Pestaña: ${sheetName}`);
+        setBadge('success', `Cargado: ${sheetName}`);
         document.getElementById('table-title').innerHTML = `<i data-lucide="database" class="text-emerald-400"></i> Detalle Cuentas - Pestaña "${sheetName}"`;
         lucide.createIcons();
         renderDashboard(globalData, globalHeaders);
       } else {
-        setBadge('error', `La pestaña "${sheetName}" está vacía`);
+        setBadge('error', `Pestaña "${sheetName}" sin registros`);
       }
     }
 
@@ -221,7 +219,7 @@
 
       const clientKey = headers.find(h => /cliente|empresa|fantasia|app|nombre/i.test(h)) || headers[0];
       const subsKey = headers.find(h => /abonad|usuario|suscriptor|cantidad/i.test(h)) || null;
-      // Detección mejorada para "Total Pagado"
+      // Detección automática de la columna Total Pagado o similares
       const payKey = headers.find(h => /total\s*pagado|pagado|monto\s*pagado|pago|estado/i.test(h)) || null;
 
       let totalSubscribers = 0;
@@ -231,19 +229,17 @@
       let paymentCounts = { "Pagado": 0, "Pendiente": 0 };
 
       data.forEach((row, idx) => {
-        // Conteo de abonados
         if (subsKey && row[subsKey] !== undefined && row[subsKey] !== '') {
           const val = parseInt(String(row[subsKey]).replace(/\D/g, '')) || 0;
           totalSubscribers += val;
           subGrowth.push({ name: String(row[clientKey] || `Cliente ${idx+1}`).substring(0, 18), value: val });
         }
 
-        // Evaluación de la columna Total Pagado
         if (payKey && row[payKey] !== undefined) {
           const rawVal = String(row[payKey]).trim().toLowerCase();
           const numVal = parseFloat(rawVal.replace(/[^0-9.-]+/g, ""));
 
-          // Se considera pagado si hay un monto > 0, o palabras afirmativas
+          // Se marca pagado si hay monto mayor a cero, o palabras clave de pago
           if ((!isNaN(numVal) && numVal > 0) || rawVal.includes('pag') || rawVal.includes('si') || rawVal.includes('ok') || rawVal.includes('deposit')) {
             paidCount++;
             paymentCounts["Pagado"]++;
